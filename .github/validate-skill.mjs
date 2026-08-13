@@ -67,7 +67,16 @@ for (const m of MANGLED) {
   if (text.includes(m)) issues.push({ sev: 'P1', code: 'MANGLED_TEXT', msg: `corrupted wording "${m}" -- should read "LLM"` });
 }
 
-const missingRefs = fileRefs(text).filter((r) => !existsSync(join(DIR, r)) && !existsSync(join(DIR, '..', r)));
+// A CI checkout of a single skill repo has no sibling skill directories on
+// disk (unlike the local multi-repo workspace this canon assumes), so a ref
+// like `keel/src/trust.mjs` from within `warden`'s own CI run can never be
+// verified here -- only flag refs whose first path segment exists locally
+// (a same-repo path that's still broken), not ones naming another skill.
+const missingRefs = fileRefs(text).filter((r) => {
+  if (existsSync(join(DIR, r))) return false;
+  const firstSegment = r.split(/[/\\]/)[0];
+  return existsSync(join(DIR, firstSegment)); // same-repo dir exists, but full path doesn't
+});
 for (const r of missingRefs) {
   issues.push({ sev: 'P1', code: 'BROKEN_REF', msg: `references \`${r}\` -- file does not exist` });
 }
