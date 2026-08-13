@@ -52,13 +52,27 @@ python scripts/harvester.py --url "https://example.com/items" --selector "div.ca
 
 | Example Script | Description |
 |---|---|
+| [`scripts/scrape_doveconviene.py`](scripts/scrape_doveconviene.py) | **DoveConviene Harvester Pro**: Dynamic flyer discovery across Italian supermarket chains/cities, LD+JSON/window.DCFlyer extraction, Sieve JSON/CSV/SQLite persistence, price comparison & interactive search CLI. |
+| [`examples/scrape_doveconviene_quickstart.py`](examples/scrape_doveconviene_quickstart.py) | Quickstart guide demonstrating DoveConviene crawler, SQLite queries, and price comparison matrix. |
+| [`examples/scrape_all_infoconcorsi.py`](examples/scrape_all_infoconcorsi.py) | **Full multi-page crawler**: traverses all pagination pages with Sieve curated JSON & CSV export. |
 | [`examples/scrape_hackernews.py`](examples/scrape_hackernews.py) | Scrapes frontpage Hacker News titles with schema validation. |
 | [`examples/scrape_infoconcorsi.py`](examples/scrape_infoconcorsi.py) | Single-page extraction of public competition notices from *Infoconcorsi Edises*. |
-| [`examples/scrape_all_infoconcorsi.py`](examples/scrape_all_infoconcorsi.py) | **Full multi-page crawler**: traverses all 18 pagination pages (176 bandi) with Sieve curated JSON & CSV export. |
 
-Run the full multi-page crawler:
+### 🛒 DoveConviene Harvester Pro Usage
+
 ```bash
-python examples/scrape_all_infoconcorsi.py
+# 1. Harvest active supermarket and discount flyers (Lidl, Conad, Eurospin, Coop, Unieuro...)
+python scripts/scrape_doveconviene.py harvest --categories iper-e-super discount --limit 10
+
+# 2. Search for offers across all scraped flyers
+python scripts/scrape_doveconviene.py search "nutella"
+python scripts/scrape_doveconviene.py search "birra" --max-price 2.00
+
+# 3. Compare prices across supermarkets (finds lowest, average, and highest prices)
+python scripts/scrape_doveconviene.py compare "caffè"
+
+# 4. Launch the Interactive Terminal Search CLI
+python scripts/scrape_doveconviene.py interactive
 ```
 
 ---

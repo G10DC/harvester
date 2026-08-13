@@ -48,10 +48,21 @@ def validate_target_url(url: str) -> bool:
         return False
 
 
+class RobotsUnavailable(Exception):
+    """Raised when robots.txt cannot be fetched/parsed and the caller has not
+    explicitly opted into treating that as allowed."""
+
+
 # ─── Robots.txt Compliance (Timeout Protected) ───────────────────────────────
 
-def check_robots(url: str, user_agent: str = USER_AGENT, timeout: float = 10.0) -> bool:
-    """Parse and check robots.txt with an explicit timeout to avoid hanging."""
+def check_robots(
+    url: str,
+    user_agent: str = USER_AGENT,
+    timeout: float = 10.0,
+    assume_allowed: bool = False,
+) -> bool:
+    """Parse robots.txt with a timeout. Fails CLOSED: unreachable/unparseable
+    means "not verified", not "allowed" -- pass assume_allowed=True to opt out."""
     if not validate_target_url(url):
         return False
     try:
@@ -61,13 +72,17 @@ def check_robots(url: str, user_agent: str = USER_AGENT, timeout: float = 10.0) 
             rp = urllib.robotparser.RobotFileParser()
             rp.parse(resp.text.splitlines())
             return rp.can_fetch(user_agent, url)
-        # If 404 or other 4xx, crawling is generally allowed
-        return True
-    except requests.RequestException:
-        # Default to allowed if robots.txt is unreachable
-        return True
-    except Exception:
-        return True
+        if 400 <= resp.status_code < 500:
+            # No robots.txt published: RFC 9309 treats this as unrestricted.
+            return True
+        # 5xx and other unexpected statuses: unreachable, not confirmed-allowed.
+        if assume_allowed:
+            return True
+        raise RobotsUnavailable(f"robots.txt fetch returned {resp.status_code} for {robots_url}")
+    except requests.RequestException as e:
+        if assume_allowed:
+            return True
+        raise RobotsUnavailable(f"robots.txt unreachable for {url}: {e}") from e
 
 
 # ─── Rate-Limited & Bound Fetcher ───────────────────────────────────────────
@@ -236,14 +251,18 @@ def run_harvest(
     schema: dict = None,
     output_dir: str = "./data",
     delay: float = 1.5,
-    max_retries: int = 3
+    max_retries: int = 3,
+    assume_allowed: bool = False,
 ) -> dict:
     """Execute the end-to-end harvesting pipeline."""
     if not validate_target_url(url):
         return {"status": "invalid_url", "url": url, "error": "Invalid URL or scheme"}
 
-    if not check_robots(url):
-        return {"status": "blocked_by_robots", "url": url}
+    try:
+        if not check_robots(url, assume_allowed=assume_allowed):
+            return {"status": "blocked_by_robots", "url": url}
+    except RobotsUnavailable as e:
+        return {"status": "robots_unavailable", "url": url, "error": str(e)}
 
     response = fetch_with_retry(url, max_retries=max_retries, delay=delay)
     if response.get("status", -1) < 0:
@@ -275,6 +294,10 @@ def main():
     parser.add_argument("--delay", type=float, default=1.5, help="Delay between requests (seconds)")
     parser.add_argument("--retries", type=int, default=3, help="Max retries on failure")
     parser.add_argument("--schema", help="Path to JSON schema file for validation")
+    parser.add_argument(
+        "--assume-allowed", action="store_true",
+        help="Treat unreachable/unparseable robots.txt as allowed (default: fail closed)",
+    )
 
     args = parser.parse_args()
 
@@ -287,6 +310,7 @@ def main():
         output_dir=args.output,
         delay=args.delay,
         max_retries=args.retries,
+        assume_allowed=args.assume_allowed,
     )
 
     print(json.dumps(result, indent=2))

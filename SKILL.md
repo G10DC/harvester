@@ -1,16 +1,13 @@
 ---
 name: harvester
 description: >-
-  Professional web scraping and structured data extraction engine. Builds
-  resilient, polite, schema-validated scraping pipelines with automatic retry,
-  rate limiting, robots.txt compliance, and provenance tagging. Delegates
-  persistence to sieve (raw/staged/curated layout), trust boundaries to warden
-  (scraped content is UNTRUSTED), OCR extraction to scribe (image-heavy pages),
-  egress filtering to sentinel, and test generation to forge. Use when scraping
-  one or more web pages to extract structured data (prices, listings, articles,
-  tables, catalogs). Never persist unvalidated scraped data — validate via
-  schema first; never ignore robots.txt or rate limits; never reimplement ETL
-  persistence — use sieve; never reimplement OCR — use scribe.
+  Web scraping and structured data extraction engine: resilient, polite,
+  schema-validated pipelines with retry, rate limiting, fail-closed robots.txt
+  compliance, and provenance tagging. Follows sieve's raw/staged/curated
+  layout convention (no shared code); scraped content is untrusted input. Use
+  when scraping web pages for structured data (prices, listings, articles,
+  tables). Never persist unvalidated scraped data; never ignore robots.txt or
+  rate limits.
 ---
 
 # harvester

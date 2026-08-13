@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 import requests
 from harvester import (
     USER_AGENT,
+    RobotsUnavailable,
     check_robots,
     extract_records,
     fetch_with_retry,
@@ -60,8 +61,28 @@ class TestRobotsCompliance(unittest.TestCase):
         self.assertFalse(check_robots("https://example.com/secret"))
 
     @patch("requests.get")
-    def test_robots_unreachable_defaults_to_true(self, mock_get):
+    def test_robots_unreachable_fails_closed_by_default(self, mock_get):
+        # A polite scraper must not treat "couldn't check" as "allowed".
         mock_get.side_effect = requests.RequestException("Timeout")
+        with self.assertRaises(RobotsUnavailable):
+            check_robots("https://example.com/any")
+
+    @patch("requests.get")
+    def test_robots_unreachable_with_assume_allowed_returns_true(self, mock_get):
+        # Explicit opt-in to the permissive behaviour still works.
+        mock_get.side_effect = requests.RequestException("Timeout")
+        self.assertTrue(check_robots("https://example.com/any", assume_allowed=True))
+
+    @patch("requests.get")
+    def test_robots_server_error_fails_closed_by_default(self, mock_get):
+        mock_get.return_value = MagicMock(status_code=503, text="")
+        with self.assertRaises(RobotsUnavailable):
+            check_robots("https://example.com/any")
+
+    @patch("requests.get")
+    def test_robots_missing_404_is_allowed(self, mock_get):
+        # RFC 9309: no robots.txt published means unrestricted, not unreachable.
+        mock_get.return_value = MagicMock(status_code=404, text="")
         self.assertTrue(check_robots("https://example.com/any"))
 
     def test_robots_invalid_url_returns_false(self):
@@ -197,6 +218,12 @@ class TestRunHarvestEndToEnd(unittest.TestCase):
     def test_pipeline_aborts_on_robots(self, _):
         res = run_harvest("https://example.com/blocked")
         self.assertEqual(res["status"], "blocked_by_robots")
+
+    @patch("harvester.check_robots", side_effect=RobotsUnavailable("timeout"))
+    def test_pipeline_aborts_when_robots_unverifiable(self, _):
+        # Fail-closed at the pipeline level too: unverifiable is not success.
+        res = run_harvest("https://example.com/unknown")
+        self.assertEqual(res["status"], "robots_unavailable")
 
     @patch("harvester.check_robots", return_value=True)
     @patch("harvester.fetch_with_retry")
